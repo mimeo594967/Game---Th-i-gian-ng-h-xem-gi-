@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nông Trại Tiếng Việt - Sinh Thái Toàn Diện</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800;900&display=swap');
+
+        /* Lớp phủ thời tiết */
+        #weather-overlay { 
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; 
+            pointer-events: none; z-index: 80; transition: all 3s ease; 
+        }
+
+        .w-morning { 
+            background: radial-gradient(circle at 20% 20%, rgba(255, 220, 100, 0.3) 0%, transparent 60%);
+            mix-blend-mode: overlay;
+        }
+        .w-noon { 
+            background: rgba(255, 255, 240, 0.1); 
+            mix-blend-mode: color-dodge; 
+        }
+        .w-afternoon { 
+            background: radial-gradient(circle at 80% 50%, rgba(255, 100, 0, 0.4) 0%, transparent 70%);
+            mix-blend-mode: overlay;
+        }
+        .w-night { 
+            background: rgba(10, 10, 30, 0.7); 
+            mix-blend-mode: multiply;
+        }
+
+        body {
+            font-family: 'Nunito', sans-serif;
+            margin: 0; padding: 0;
+            background-color: #1a1a2e;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* --- GIAO DIỆN CHƠI (HUD) --- */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            padding: 20px; box-sizing: border-box; z-index: 100; pointer-events: none;
+            display: flex; justify-content: space-between; align-items: flex-start;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            padding: 15px 25px; border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1); pointer-events: auto;
+        }
+        #clock { font-size: 28px; font-weight: 900; color: #1e293b; letter-spacing: 1px; }
+        #weather-status { font-size: 16px; color: #3b82f6; font-weight: 800; margin-top: 5px; display: flex; align-items: center; gap: 8px;}
+        
+        .progress-wrapper { margin-top: 15px; }
+        .progress-bg { width: 220px; height: 12px; background: rgba(0,0,0,0.1); border-radius: 10px; overflow: hidden; }
+        #progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #34d399, #10b981); transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
+        #progress-text { font-size: 13px; font-weight: 800; color: #475569; margin-top: 5px; text-align: right; }
+
+        .controls-hint { font-size: 15px; color: #334155; font-weight: 600; line-height: 1.6; text-align: right;}
+        .key-btn { background: #cbd5e1; padding: 2px 8px; border-radius: 6px; border-bottom: 3px solid #94a3b8; font-weight: 800; color: #0f172a; margin: 0 2px;}
+
+        /* --- THẾ GIỚI GAME --- */
+        #viewport { width: 100vw; height: 100vh; position: relative; overflow: hidden; background-color: #557a46; }
+        
+        #world {
+            position: absolute; top: 0; left: 0; width: 2450px; height: 2450px; /* 35x35 tiles */
+            background-color: #84cc16; 
+            background-image: 
+                radial-gradient(circle at 10px 10px, rgba(255,255,255,0.15) 2px, transparent 2px),
+                radial-gradient(circle at 40px 40px, rgba(0,0,0,0.05) 3px, transparent 3px);
+            background-size: 60px 60px;
+            transition: transform 0.15s linear;
+        }
+
+        /* --- CẢNH QUAN MÔI TRƯỜNG --- */
+        .lake {
+            position: absolute; width: 550px; height: 350px;
+            background: linear-gradient(135deg, #38bdf8, #0284c7);
+            border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+            left: 50px; top: 1950px;
+            box-shadow: inset 0 0 30px rgba(0,0,0,0.2), 0 0 0 15px rgba(56, 189, 248, 0.4);
+            animation: waterFlow 6s ease-in-out infinite alternate;
+            z-index: 1;
+        }
+        .river {
+            position: absolute; width: 200px; height: 2450px;
+            background: linear-gradient(90deg, #0284c7, #38bdf8, #0284c7);
+            right: 0px; top: 0px;
+            box-shadow: inset 10px 0 20px rgba(0,0,0,0.2), -15px 0 0 rgba(56, 189, 248, 0.4);
+            z-index: 1;
+        }
+        @keyframes waterFlow {
+            0% { border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%; }
+            100% { border-radius: 60% 40% 30% 70% / 60% 50% 40% 50%; }
+        }
+        
+        .environment-item { position: absolute; z-index: 5; filter: drop-shadow(0 8px 6px rgba(0,0,0,0.3)); pointer-events: none;}
+        .tree { font-size: 80px; z-index: 45; }
+        .weed { font-size: 35px; opacity: 0.8; z-index: 4; }
+        .house { font-size: 150px; z-index: 45; }
+        .dock { font-size: 60px; z-index: 10; transform: rotate(15deg);}
+        .bridge { font-size: 100px; z-index: 10; }
+
+        /* Luống hoa */
+        .plot {
+            position: absolute; width: 68px; height: 68px;
+            background-color: #a16207; 
+            border-radius: 8px; display: flex; align-items: center; justify-content: center;
+            font-size: 40px; box-shadow: inset 0 4px 10px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.3s ease; z-index: 10;
+        }
+        
+        .bed-container {
+            position: absolute; pointer-events: none;
+            border: 2px solid rgba(255,255,255,0.2); border-radius: 12px;
+            background: rgba(161, 98, 7, 0.1); padding: 5px; z-index: 9;
+        }
+
+        /* Động vật & Nhân vật */
+        .animal { position: absolute; font-size: 45px; z-index: 40; filter: drop-shadow(0 6px 8px rgba(0,0,0,0.25)); transition: left 3s ease-in-out, top 3s ease-in-out; }
+        #character {
+            position: absolute; width: 70px; height: 70px; display: flex;
+            align-items: center; justify-content: center; font-size: 55px; z-index: 50;
+            transition: left 0.12s linear, top 0.12s linear; filter: drop-shadow(0 8px 10px rgba(0,0,0,0.3));
+        }
+
+        /* --- HỆ THỐNG THỜI TIẾT HIỆN ĐẠI --- */
+        #weather-overlay { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 80; transition: all 2s ease; }
+        
+        .w-clear { background: transparent; }
+        .w-sun { background: radial-gradient(circle at 50% 0%, rgba(253, 224, 71, 0.25) 0%, transparent 60%); mix-blend-mode: overlay; }
+        .w-cloudy { background: rgba(241, 245, 249, 0.15); backdrop-filter: blur(1px); }
+        .w-rain {
+            background-color: rgba(30, 41, 59, 0.4);
+            background-image: linear-gradient(170deg, transparent 0%, rgba(255,255,255,0.3) 10%, transparent 20%);
+            background-size: 20px 100px;
+            animation: rainDrop 0.4s linear infinite;
+        }
+        .w-fog { background: rgba(226, 232, 240, 0.5); backdrop-filter: blur(4px); }
+        .w-night { background: rgba(15, 23, 42, 0.65); mix-blend-mode: multiply; }
+
+        @keyframes rainDrop { 0% { background-position: 0 0; } 100% { background-position: -20px 100px; } }
+
+        /* --- MODAL TRẮC NGHIỆM & ĐIỀN GIỜ --- */
+        #quiz-modal {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(8px);
+            display: none; align-items: center; justify-content: center; z-index: 200;
+        }
+        .quiz-box {
+            background: #ffffff; padding: 40px; border-radius: 30px; width: 90%; max-width: 550px;
+            text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+            transform: scale(0.9); opacity: 0; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .quiz-box.show { transform: scale(1); opacity: 1; }
+        
+        .quiz-icon { font-size: 50px; margin-bottom: 15px; }
+        .question-vn { font-size: 24px; font-weight: 900; color: #0f172a; margin-bottom: 25px; line-height: 1.4; }
+        
+        .answers-grid { display: grid; gap: 12px; }
+        .answer-btn {
+            background: #f8fafc; border: 2px solid #e2e8f0; color: #334155;
+            padding: 16px 20px; border-radius: 16px; font-size: 18px; font-weight: 700;
+            cursor: pointer; transition: all 0.2s; text-align: center; display: flex; align-items: center; justify-content: center;
+        }
+        .answer-btn:hover { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15); }
+
+        /* Giao diện Game 2: Điền số giờ phút */
+        .fill-time-box {
+            display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
+            font-size: 22px; font-weight: 800; color: #1e293b; margin-bottom: 25px;
+        }
+        .time-input {
+            width: 70px; padding: 10px; font-size: 22px; font-weight: 900;
+            text-align: center; border: 2px solid #cbd5e1; border-radius: 12px;
+            outline: none; background: #f8fafc; color: #0284c7;
+            transition: all 0.2s;
+        }
+        .time-input:focus { border-color: #0284c7; background: #ffffff; box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.15); }
+        .submit-btn {
+            background: linear-gradient(135deg, #10b981, #059669); color: white;
+            border: none; padding: 16px 32px; font-size: 20px; font-weight: 800;
+            border-radius: 16px; cursor: pointer; transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); width: 100%; margin-top: 10px;
+        }
+        .submit-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4); }
+        .game-badge {
+            display: inline-block; padding: 4px 12px; background: #e0f2fe; color: #0369a1;
+            font-size: 14px; font-weight: 800; border-radius: 20px; margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div class="glass-panel">
+            <div id="clock">Ngày 1 - 06:00</div>
+            <div id="weather-status"><span>🌅</span> Sáng sớm tinh sương</div>
+            <div class="progress-wrapper">
+                <div class="progress-bg"><div id="progress-bar"></div></div>
+                <div id="progress-text">Đã trồng: 0 / 14 luống</div>
+            </div>
+        </div>
+        <div class="glass-panel controls-hint">
+            Di chuyển: <span class="key-btn">W</span> <span class="key-btn">A</span> <span class="key-btn">S</span> <span class="key-btn">D</span><br>
+            Thao tác (Đào/Tưới/Tỉa): <span class="key-btn" style="padding: 2px 30px;">Space</span>
+        </div>
+    </div>
+
+    <div id="viewport">
+        <div id="world">
+            <div class="lake"></div>
+            <div class="river"></div>
+            
+            <div class="environment-item house" style="left: 1900px; top: 2000px;">🏡</div>
+            <div class="environment-item house" style="left: 2150px; top: 1950px;">🏚️</div>
+            <div class="environment-item house" style="left: 1950px; top: 2200px;">🚜</div>
+            <div class="environment-item dock" style="left: 450px; top: 2050px;">🛶</div>
+            <div class="environment-item bridge" style="left: 2200px; top: 1000px;">🌉</div>
+
+            <div id="character">👨‍🌾</div>
+        </div>
+        <div id="weather-overlay" class="w-clear"></div>
+    </div>
+
+    <div id="quiz-modal">
+        <div class="quiz-box" id="quiz-box">
+            <div id="game-badge" class="game-badge">Game 1/2: Chọn từ tiếng Anh</div>
+            <div class="quiz-icon">🌱💧✂️</div>
+            <div class="question-vn" id="question-text"></div>
+            <div id="game-content"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- ÂM THANH ---
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+
+        function playSound(type) {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            let now = audioCtx.currentTime;
+
+            if (type === 'dig') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(40, now + 0.15);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                osc.start(now); osc.stop(now + 0.15);
+            } else if (type === 'water') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(500, now);
+                osc.frequency.linearRampToValueAtTime(300, now + 0.2);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.2);
+                osc.start(now); osc.stop(now + 0.2);
+            } else if (type === 'trim') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(900, now);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now); osc.stop(now + 0.1);
+            } else if (type === 'bloom') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, now); 
+                osc.frequency.setValueAtTime(659.25, now + 0.1); 
+                osc.frequency.setValueAtTime(783.99, now + 0.2); 
+                osc.frequency.setValueAtTime(1046.50, now + 0.3); 
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.4, now + 0.1);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+                osc.start(now); osc.stop(now + 0.6);
+            } else if (type === 'error') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(200, now);
+                osc.frequency.linearRampToValueAtTime(150, now + 0.2);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+                osc.start(now); osc.stop(now + 0.2);
+            }
+        }
+
+        // --- DỮ LIỆU GAME (MỚI) ---
+        const lessons = [
+            { vn: "đi bơi", question: "Con đi bơi lúc mấy giờ?", en: "go swimming" },
+            { vn: "ăn sáng", question: "Con ăn sáng lúc mấy giờ?", en: "eat breakfast" },
+            { vn: "về nhà", question: "Con về nhà lúc mấy giờ?", en: "go home" },
+            { vn: "chơi đá banh", question: "Con chơi đá banh lúc mấy giờ?", en: "play soccer" },
+            { vn: "chơi iPad", question: "Con chơi iPad lúc mấy giờ?", en: "play on the iPad" },
+            { vn: "đi ngủ", question: "Con đi ngủ lúc mấy giờ?", en: "go to sleep" },
+            { vn: "đi tắm", question: "Con đi tắm lúc mấy giờ?", en: "take a shower / bath" },
+            { vn: "đi học", question: "Con đi học lúc mấy giờ?", en: "go to school" }
+        ];
+        
+        const flowers = ['🌺', '🌻', '🌸', '🌼', '🌷', '🌹', '🏵️'];
+        const animals = ['🐄', '🐓', '🐑', '🦆', '🐕', '🐈', '🐇'];
+        const decors = ['🌳', '🌲', '🌿', '🌾', '🍄', '🍀', '🍀'];
+
+        const TILE_SIZE = 70;
+        const MAP_COLS = 35; const MAP_ROWS = 35; 
+        let charX = 17; let charY = 17; 
+        
+        let gameMinutes = 6 * 60; let gameDay = 1;
+        let totalBeds = 14; let completedBeds = 0;
+
+        const worldEl = document.getElementById('world');
+        const characterEl = document.getElementById('character');
+        const viewportEl = document.getElementById('viewport');
+        const overlayEl = document.getElementById('weather-overlay');
+
+        // Vị trí 14 luống hoa (tránh hồ, sông, nhà)
+        const bedCoords = [
+            {x: 4, y: 4}, {x: 12, y: 4}, {x: 20, y: 4}, {x: 28, y: 4},
+            {x: 4, y: 12}, {x: 12, y: 12}, {x: 20, y: 12}, {x: 28, y: 12},
+            {x: 4, y: 20}, {x: 12, y: 20}, {x: 20, y: 20}, {x: 28, y: 20},
+            {x: 12, y: 28}, {x: 20, y: 28}
+        ];
+        let beds = [];
+
+        function isCollision(x, y) {
+            for (let b of bedCoords) {
+                if (x >= b.x - 1 && x <= b.x + 3 && y >= b.y - 1 && y <= b.y + 3) return true;
+            }
+            if (x >= MAP_COLS - 4) return true;
+            if (x <= 9 && y >= 26) return true;
+            if (x >= 25 && y >= 25) return true;
+            return false;
+        }
+
+        function initWorld() {
+            // 1. Tạo 14 luống hoa
+            bedCoords.forEach((coord, index) => {
+                let bed = { id: index, startX: coord.x, startY: coord.y, state: 0, plots: [] };
+                
+                let container = document.createElement('div');
+                container.className = 'bed-container';
+                container.style.left = (coord.x * TILE_SIZE - 6) + 'px';
+                container.style.top = (coord.y * TILE_SIZE - 6) + 'px';
+                container.style.width = (3 * TILE_SIZE + 12) + 'px';
+                container.style.height = (3 * TILE_SIZE + 12) + 'px';
+                worldEl.appendChild(container);
+
+                for(let i=0; i<3; i++) {
+                    for(let j=0; j<3; j++) {
+                        let plotEl = document.createElement('div');
+                        plotEl.className = 'plot';
+                        plotEl.style.left = ((coord.x + i) * TILE_SIZE) + 'px';
+                        plotEl.style.top = ((coord.y + j) * TILE_SIZE) + 'px';
+                        worldEl.appendChild(plotEl);
+                        bed.plots.push({ x: coord.x + i, y: coord.y + j, el: plotEl });
+                    }
+                }
+                beds.push(bed);
+            });
+
+            // 2. Sinh cỏ dại và cây cối
+            let occupiedDecorCells = new Set();
+            let placedDecors = 0;
+            let maxAttempts = 2000;
+            let attempts = 0;
+
+            while (placedDecors < 150 && attempts < maxAttempts) {
+                attempts++;
+                let rx = Math.floor(Math.random() * MAP_COLS);
+                let ry = Math.floor(Math.random() * MAP_ROWS);
+                let cellKey = `${rx},${ry}`;
+
+                if (!isCollision(rx, ry) && !occupiedDecorCells.has(cellKey)) {
+                    occupiedDecorCells.add(cellKey);
+                    
+                    let decorEl = document.createElement('div');
+                    let type = decors[Math.floor(Math.random() * decors.length)];
+                    decorEl.className = (type === '🌳' || type === '🌲') ? 'environment-item tree' : 'environment-item weed';
+                    decorEl.innerText = type;
+                    
+                    decorEl.style.left = (rx * TILE_SIZE + (Math.random() * 10 - 5)) + 'px';
+                    decorEl.style.top = (ry * TILE_SIZE + (Math.random() * 10 - 5)) + 'px';
+                    worldEl.appendChild(decorEl);
+                    
+                    placedDecors++;
+                }
+            }
+
+            // 3. Sinh động vật
+            for(let i=0; i<12; i++) {
+                let animalEl = document.createElement('div');
+                animalEl.className = 'animal';
+                animalEl.innerText = animals[Math.floor(Math.random() * animals.length)];
+                
+                let startX, startY;
+                do {
+                    startX = Math.floor(Math.random() * MAP_COLS);
+                    startY = Math.floor(Math.random() * MAP_ROWS);
+                } while (isCollision(startX, startY));
+
+                animalEl.style.left = (startX * TILE_SIZE) + 'px';
+                animalEl.style.top = (startY * TILE_SIZE) + 'px';
+                worldEl.appendChild(animalEl);
+                
+                setInterval(() => {
+                    let cX = parseFloat(animalEl.style.left); let cY = parseFloat(animalEl.style.top);
+                    animalEl.style.left = Math.max(0, Math.min((MAP_COLS-2)*TILE_SIZE, cX + (Math.random()*150 - 75))) + 'px';
+                    animalEl.style.top = Math.max(0, Math.min((MAP_ROWS-2)*TILE_SIZE, cY + (Math.random()*150 - 75))) + 'px';
+                }, 4000 + Math.random()*2000);
+            }
+
+            updateCamera();
+        }
+
+        // --- HỆ THỐNG THỜI GIAN VÀ THỜI TIẾT ---
+        setInterval(() => {
+            gameMinutes += 10; 
+            if(gameMinutes >= 24 * 60) { gameMinutes = 0; gameDay++; }
+            let h = Math.floor(gameMinutes / 60);
+            let m = gameMinutes % 60;
+            document.getElementById('clock').innerText = `Ngày ${gameDay} - ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+            updateWeather(h);
+        }, 1000); 
+
+        function updateWeather(h) {
+            let overlay = overlayEl;
+            let status = document.getElementById('weather-status');
+
+            if(h >= 5 && h < 8) {
+                overlay.className = 'w-sun'; overlay.style.background = 'radial-gradient(circle at 80% 20%, rgba(251, 146, 60, 0.25), transparent 70%)';
+                status.innerHTML = '<span>🌅</span> Bình minh ấm áp';
+            } else if (h >= 8 && h < 14) {
+                overlay.className = 'w-clear'; 
+                status.innerHTML = '<span>☀️</span> Trời trong xanh';
+            } else if (h >= 14 && h < 16) {
+                overlay.className = 'w-cloudy'; 
+                status.innerHTML = '<span>⛅</span> Mây kéo tới';
+            } else if (h >= 16 && h < 18) {
+                overlay.className = 'w-rain'; 
+                status.innerHTML = '<span>🌧️</span> Mưa rào mát mẻ';
+            } else if (h >= 18 && h < 20) {
+                overlay.className = 'w-fog'; 
+                status.innerHTML = '<span>🌫️</span> Sương mù buông xuống';
+            } else {
+                overlay.className = 'w-night'; 
+                status.innerHTML = '<span>🌙</span> Đêm tĩnh lặng';
+            }
+        }
+
+        // --- CAMERA & DI CHUYỂN ---
+        function updateCamera() {
+            characterEl.style.left = (charX * TILE_SIZE) + 'px';
+            characterEl.style.top = (charY * TILE_SIZE) + 'px';
+            let offsetX = (viewportEl.clientWidth / 2) - (charX * TILE_SIZE) - (TILE_SIZE / 2);
+            let offsetY = (viewportEl.clientHeight / 2) - (charY * TILE_SIZE) - (TILE_SIZE / 2);
+            worldEl.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if(document.getElementById('quiz-modal').style.display === 'flex') return;
+
+            let newX = charX; let newY = charY;
+            if (e.key === 'w' || e.key === 'ArrowUp') newY--;
+            if (e.key === 's' || e.key === 'ArrowDown') newY++;
+            if (e.key === 'a' || e.key === 'ArrowLeft') newX--;
+            if (e.key === 'd' || e.key === 'ArrowRight') newX++;
+            
+            if (newX >= 0 && newX < MAP_COLS - 2 && newY >= 0 && newY < MAP_ROWS) {
+                if(newX <= 7 && newY >= 28) return; // Chặn xuống hồ sâu
+                charX = newX; charY = newY; updateCamera();
+            }
+            if (e.key === ' ') interact();
+        });
+
+        // --- TƯƠNG TÁC LUỐNG HOA ---
+        let currentBed = null;
+
+        function interact() {
+            let bed = beds.find(b => charX >= b.startX && charX < b.startX + 3 && charY >= b.startY && charY < b.startY + 3);
+            if(!bed) return;
+
+            if (bed.state === 0) {
+                playSound('dig'); bed.state = 1;
+                bed.plots.forEach(p => { 
+                    p.el.style.backgroundColor = "#713f12"; 
+                    p.el.style.boxShadow = "inset 0 10px 15px rgba(0,0,0,0.5)";
+                    p.el.innerText = '🕳️'; 
+                });
+            } else if (bed.state === 1) {
+                playSound('water'); bed.state = 2;
+                bed.plots.forEach(p => { 
+                    p.el.style.backgroundColor = "#422006"; 
+                    p.el.innerText = '🌱'; 
+                });
+            } else if (bed.state === 2) {
+                playSound('trim'); currentBed = bed; openGameSequence();
+            }
+        }
+
+        // --- LOGIC TRÒ CHƠI MỚI (2 MINIGAME) ---
+        let currentLesson = null;
+
+        function openGameSequence() {
+            // Lấy bài học theo thứ tự (quay vòng nếu vượt quá 8)
+            currentLesson = lessons[completedBeds % lessons.length];
+            showGame1();
+        }
+
+        // GAME 1: Trắc nghiệm tiếng Anh
+        function showGame1() {
+            document.getElementById('game-badge').innerText = "Game 1/2: Tìm nghĩa tiếng Anh";
+            document.getElementById('question-text').innerHTML = `Từ này nghĩa là gì: <br><b style="color: #0284c7;">"${currentLesson.vn}"</b>`;
+
+            let wrongOptions = lessons.filter(l => l.en !== currentLesson.en).sort(() => 0.5 - Math.random()).slice(0, 3);
+            let options = [currentLesson, ...wrongOptions].sort(() => 0.5 - Math.random());
+
+            let container = document.getElementById('game-content');
+            container.innerHTML = '<div class="answers-grid" id="answers-container"></div>';
+            let answersGrid = document.getElementById('answers-container');
+
+            options.forEach(opt => {
+                let btn = document.createElement('button');
+                btn.className = 'answer-btn';
+                btn.innerText = opt.en;
+                btn.onclick = () => checkGame1(opt.en === currentLesson.en);
+                answersGrid.appendChild(btn);
+            });
+
+            document.getElementById('quiz-modal').style.display = 'flex';
+            setTimeout(() => document.getElementById('quiz-box').classList.add('show'), 10);
+        }
+
+        function checkGame1(isCorrect) {
+            if (isCorrect) {
+                playSound('water');
+                showGame2(); // Chuyển sang Game 2
+            } else {
+                playSound('error');
+                let box = document.getElementById('quiz-box');
+                box.style.transform = 'scale(0.95)';
+                setTimeout(() => box.style.transform = 'scale(1)', 150);
+            }
+        }
+
+        // GAME 2: Điền số giờ / số phút
+        function showGame2() {
+            document.getElementById('game-badge').innerText = "Game 2/2: Điền thời gian";
+            
+            // Lấy từ khóa hành động cho khớp câu hỏi
+            let actionText = currentLesson.vn; 
+            document.getElementById('question-text').innerText = currentLesson.question;
+
+            let container = document.getElementById('game-content');
+            container.innerHTML = `
+                <div class="fill-time-box">
+                    Con ${actionText} lúc 
+                    <input type="text" id="hour-input" class="time-input" placeholder=".." autofocus> giờ 
+                    <input type="text" id="minute-input" class="time-input" placeholder=".."> phút.
+                </div>
+                <button class="submit-btn" onclick="checkGame2()">Xác nhận 🌱</button>
+            `;
+
+            setTimeout(() => document.getElementById('hour-input').focus(), 100);
+        }
+
+        function checkGame2() {
+            let hour = document.getElementById('hour-input').value.trim();
+            let minute = document.getElementById('minute-input').value.trim();
+
+            // Yêu cầu chỉ cần điền vào cả 2 ô
+            if (hour !== "" && minute !== "") {
+                closeQuiz();
+                growFlowers();
+            } else {
+                playSound('error');
+                alert("Con hãy điền số giờ và số phút nhé!");
+            }
+        }
+
+        function closeQuiz() {
+            document.getElementById('quiz-box').classList.remove('show');
+            setTimeout(() => document.getElementById('quiz-modal').style.display = 'none', 300);
+        }
+
+        // HOÀN THÀNH 2 GAME -> TRỒNG HOA
+        function growFlowers() {
+            playSound('bloom');
+            confetti({ particleCount: 200, spread: 120, origin: { y: 0.5 }, colors: ['#ff0a54', '#ff477e', '#ff7096', '#ff85a1', '#fbb1bd', '#f9bec7'] });
+
+            currentBed.state = 3;
+            let flowerType = flowers[completedBeds % flowers.length];
+            currentBed.plots.forEach((p, idx) => { 
+                setTimeout(() => {
+                    p.el.innerText = flowerType; 
+                    p.el.style.backgroundColor = "#65a30d"; 
+                    p.el.style.boxShadow = "none";
+                    p.el.style.border = "1px solid #4d7c0f";
+                }, idx * 100); 
+            });
+
+            completedBeds++;
+            document.getElementById('progress-bar').style.width = ((completedBeds / totalBeds) * 100) + '%';
+            document.getElementById('progress-text').innerText = `Đã trồng: ${completedBeds} / ${totalBeds} luống`;
+
+            if(completedBeds === totalBeds) {
+                setTimeout(() => alert("🎉 Chúc mừng! Bác nông dân đã xuất sắc hoàn thành toàn bộ nông trại hoa!"), 1500);
+            }
+        }
+
+        // Khởi động Game
+        initWorld();
+        window.addEventListener('keydown', () => {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+        }, { once: true });
+    </script>
+</body>
+</html>
