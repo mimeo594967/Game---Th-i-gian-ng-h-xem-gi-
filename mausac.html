@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Học Từ Vựng Màu Sắc vui nhộn</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            user-select: none;
+        }
+
+        #game-container {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+            position: relative;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        #score-board {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #2ecc71;
+            margin-bottom: 15px;
+        }
+
+        #progress-container {
+            width: 100%;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            position: relative;
+            height: 24px;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        #progress-bar {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #3498db, #2ecc71);
+            transition: width 0.4s ease;
+        }
+
+        #progress-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        #color-box {
+            width: 100%;
+            height: 150px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.15);
+            transition: transform 0.2s, background-color 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .bounce { animation: bounce 0.5s ease; }
+        .shake { animation: shake 0.5s ease; }
+
+        @keyframes bounce {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        #word-prompt {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 25px;
+            color: #2c3e50;
+        }
+
+        #options-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .btn {
+            padding: 15px 20px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            background-color: #e0e0e0;
+            color: #333;
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+        }
+
+        #start-screen {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .start-btn {
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(46,204,113,0.4);
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="start-screen">
+        <h2>Chào mừng bạn đến với Game Màu Sắc! 🎉</h2>
+        <p>Thử thách 10 từ vựng ngẫu nhiên!</p>
+        <button class="start-btn" onclick="startGame()">BẮT ĐẦU CHƠI</button>
+    </div>
+
+    <h1>Đoán Màu Sắc 🎨</h1>
+    <div id="score-board">Điểm: <span id="score">0</span></div>
+    
+    <div id="progress-container">
+        <div id="progress-bar"></div>
+        <div id="progress-text">Câu hỏi: 0 / 0</div>
+    </div>
+    
+    <div id="color-box"></div>
+    <div id="word-prompt">Loading...</div>
+    <div id="options-container"></div>
+</div>
+
+<script>
+    // Danh sách từ vựng gốc
+    const vocabulary = [
+        { en: 'black', vi: 'màu đen', hex: '#000000' },
+        { en: 'white', vi: 'màu trắng', hex: '#FFFFFF' },
+        { en: 'blue', vi: 'màu xanh dương', hex: '#3498db' },
+        { en: 'green', vi: 'màu xanh lá', hex: '#2ecc71' },
+        { en: 'red', vi: 'màu đỏ', hex: '#e74c3c' },
+        { en: 'purple', vi: 'màu tím', hex: '#9b59b6' },
+        { en: 'yellow', vi: 'màu vàng', hex: '#f1c40f' },
+        { en: 'pink', vi: 'màu hồng', hex: '#ff9ff3' },
+        { en: 'orange', vi: 'màu cam', hex: '#e67e22' },
+        { en: 'brown', vi: 'màu nâu', hex: '#8b5a2b' },
+        { en: 'gray', vi: 'màu xám', hex: '#95a5a6' }
+    ];
+
+    let gameQuestions = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playSound(type) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        if (type === 'correct') {
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); 
+            osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.1); 
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+        } else if (type === 'wrong') {
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.2);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.25);
+        } else if (type === 'victory') {
+            osc.type = 'sine';
+            const notes = [523.25, 659.25, 783.99, 1046.50];
+            notes.forEach((freq, index) => {
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime + index * 0.1);
+            });
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+        }
+    }
+
+    function startGame() {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        document.getElementById('start-screen').style.display = 'none';
+        score = 0;
+        currentQuestionIndex = 0;
+        document.getElementById('score').innerText = score;
+        
+        // --- ĐIỀU CHỈNH: Trộn ngẫu nhiên mảng từ vựng và lấy đúng 10 từ ---
+        const shuffled = [...vocabulary].sort(() => Math.random() - 0.5);
+        gameQuestions = shuffled.slice(0, 10);
+        
+        nextQuestion();
+    }
+
+    function updateProgressBar() {
+        const total = gameQuestions.length; // 10 câu
+        const current = currentQuestionIndex + 1;
+        const remaining = total - current;
+        
+        const progressPercent = (currentQuestionIndex / total) * 100;
+        document.getElementById('progress-bar').style.width = `${progressPercent}%`;
+        document.getElementById('progress-text').innerText = `Câu: ${current}/${total} (Còn lại: ${remaining})`;
+    }
+
+    function nextQuestion() {
+        if (currentQuestionIndex >= gameQuestions.length) {
+            playSound('victory');
+            document.getElementById('progress-bar').style.width = '100%';
+            document.getElementById('progress-text').innerText = `Hoàn thành ${gameQuestions.length}/${gameQuestions.length} câu!`;
+            
+            setTimeout(() => {
+                alert(`Tuyệt vời! Bạn đã hoàn thành bài học 10 câu với số điểm: ${score} 🎉`);
+                document.getElementById('start-screen').style.display = 'flex';
+            }, 300);
+            return;
+        }
+
+        updateProgressBar();
+        const currentQuestion = gameQuestions[currentQuestionIndex];
+
+        document.getElementById('word-prompt').innerText = currentQuestion.en.toUpperCase();
+        
+        const colorBox = document.getElementById('color-box');
+        colorBox.style.backgroundColor = currentQuestion.hex;
+        colorBox.style.border = currentQuestion.en === 'white' ? "2px solid #ddd" : "none";
+
+        let options = [currentQuestion.vi];
+        while (options.length < 4) {
+            const randomVi = vocabulary[Math.floor(Math.random() * vocabulary.length)].vi;
+            if (!options.includes(randomVi)) {
+                options.push(randomVi);
+            }
+        }
+        options.sort(() => Math.random() - 0.5);
+
+        const optionsContainer = document.getElementById('options-container');
+        optionsContainer.innerHTML = '';
+        options.forEach(opt => {
+            const button = document.createElement('button');
+            button.className = 'btn';
+            button.innerText = opt;
+            button.onclick = () => checkAnswer(opt, button, currentQuestion.vi);
+            optionsContainer.appendChild(button);
+        });
+    }
+
+    function checkAnswer(selectedAnswer, button, correctAnswer) {
+        const colorBox = document.getElementById('color-box');
+        colorBox.classList.remove('bounce', 'shake');
+
+        if (selectedAnswer === correctAnswer) {
+            playSound('correct');
+            score += 10;
+            document.getElementById('score').innerText = score;
+            colorBox.classList.add('bounce');
+            
+            button.style.backgroundColor = '#2ecc71';
+            button.style.color = 'white';
+            
+            currentQuestionIndex++;
+            setTimeout(nextQuestion, 600);
+        } else {
+            playSound('wrong');
+            colorBox.classList.add('shake');
+            
+            button.style.backgroundColor = '#e74c3c';
+            button.style.color = 'white';
+            button.disabled = true; 
+        }
+    }
+</script>
+
+</body>
+</html>
